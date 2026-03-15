@@ -1,0 +1,51 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               String           @id @default(uuid())
+  email            String           @unique
+  passwordHash     String
+  createdAt        DateTime         @default(now())
+  quantumAccounts  QuantumAccount[]
+  jobs             Job[]
+}
+
+model QuantumAccount {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  provider    String
+  token       String
+  backendName String?
+  instance    String?
+  createdAt   DateTime @default(now())
+}
+
+model Module {
+  id                 String @id @default(uuid())
+  name               String @unique
+  description        String
+  qiskitCodeTemplate String
+}
+
+model Job {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  jobName    String
+  code       String
+  backend    String
+  status     String
+  ibmJobId   String?
+  result     Json?
+  createdAt  DateTime @default(now())
+}
