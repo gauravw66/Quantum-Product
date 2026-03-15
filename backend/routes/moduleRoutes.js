@@ -11,7 +11,7 @@ const moduleController = require('../controllers/moduleController');
 
 /**
  * @swagger
- * /modules:
+ * /api/modules:
  *   get:
  *     summary: Get all available quantum modules
  *     tags: [Modules]
@@ -23,7 +23,7 @@ router.get('/', moduleController.getModules);
 
 /**
  * @swagger
- * /modules/seed:
+ * /api/modules/seed:
  *   post:
  *     summary: Seed the database with sample modules
  *     tags: [Modules]

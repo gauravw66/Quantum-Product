@@ -1,0 +1,25 @@
+{
+  "backend": "ibm_fez",
+  "created": "2026-03-15T19:10:35.054264Z",
+  "estimated_running_time_seconds": 3.496462135,
+  "id": "d6rg8aropkic73fj56c0",
+  "cost": 600,
+  "params": {
+    "pubs": [
+      [
+        "OPENQASM 3.0;\ninclude \"stdgates.inc\";\nbit[4] meas;\nrz(pi/2) $0;\nsx $0;\nrz(pi/2) $0;\nx $2;\ncz $0, $1;\ncz $2, $3;\nrz(pi/2) $0;\nsx $0;\nrz(pi/2) $0;\nmeas[0] = measure $0;\nmeas[1] = measure $1;\nmeas[2] = measure $2;\nmeas[3] = measure $3;",
+        null,
+        1024
+      ]
+    ],
+    "version": "2"
+  },
+  "program": {
+    "id": "sampler"
+  },
+  "state": {
+    "status": "Completed"
+  },
+  "status": "Completed",
+  "user_id": "IBMid-697001G2GK"
+}

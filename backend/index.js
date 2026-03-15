@@ -41,19 +41,16 @@ app.use(cors());
 app.use(express.json());
 
 const authRoutes = require('./routes/authRoutes');
-app.use('/auth', authRoutes);
-
 const quantumRoutes = require('./routes/quantumRoutes');
-app.use('/quantum', quantumRoutes);
-
 const aiRoutes = require('./routes/aiRoutes');
-app.use('/ai', aiRoutes);
-
 const jobRoutes = require('./routes/jobRoutes');
-app.use('/jobs', jobRoutes);
-
 const moduleRoutes = require('./routes/moduleRoutes');
-app.use('/modules', moduleRoutes);
+
+app.use('/api/auth', authRoutes);
+app.use('/api/quantum', quantumRoutes);
+app.use('/api/ai', aiRoutes);
+app.use('/api/jobs', jobRoutes);
+app.use('/api/modules', moduleRoutes);
 
 app.get('/', (req, res) => {
     res.send('Quantum Cloud Runner Backend is running');

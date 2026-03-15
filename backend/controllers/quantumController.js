@@ -4,16 +4,24 @@ const prisma = new PrismaClient();
 
 const connectQuantum = async (req, res) => {
     try {
-        const { token, provider, backendName, instance } = req.body;
+        const { token, apiToken, provider, backendName, instance } = req.body;
+        const finalToken = (token || apiToken)?.trim();
         const userId = req.user.userId;
 
-        if (!token) {
+        if (!finalToken) {
             return res.status(400).json({ message: 'Token is required' });
         }
 
-        const isValid = await ibmService.validateApiKey(token);
-        if (!isValid) {
-            return res.status(400).json({ message: 'Invalid IBM Quantum Token' });
+        console.log(`Attempting to connect account for user ${userId} with key ending in ...${finalToken.slice(-4)}`);
+        
+        try {
+            await ibmService.validateApiKey(finalToken);
+        } catch (error) {
+            console.error('Validation Error Details:', error.message);
+            return res.status(400).json({ 
+                error: 'Invalid IBM Quantum Token', 
+                message: error.message 
+            });
         }
 
         // Remove existing accounts for this user to avoid confusion
@@ -24,7 +32,7 @@ const connectQuantum = async (req, res) => {
             data: {
                 userId,
                 provider: provider || 'IBM',
-                token: token,
+                token: finalToken,
                 backendName: backendName,
                 instance: instance
             }

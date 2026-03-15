@@ -25,7 +25,7 @@ const authController = require('../controllers/authController');
 
 /**
  * @swagger
- * /auth/signup:
+ * /api/auth/signup:
  *   post:
  *     summary: Create a new user account
  *     tags: [Auth]
@@ -47,7 +47,7 @@ router.post('/signup', authController.signup);
 
 /**
  * @swagger
- * /auth/login:
+ * /api/auth/login:
  *   post:
  *     summary: Log in to an existing account
  *     tags: [Auth]

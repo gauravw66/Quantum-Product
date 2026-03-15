@@ -4,15 +4,14 @@ const IBM_AUTH_URL = 'https://quantum-computing.ibm.com/api/users/loginWithToken
 const IBM_API_BASE = 'https://quantum-computing.ibm.com/api';
 const IBM_RUNTIME_BASE = 'https://us-east.quantum-computing.cloud.ibm.com';
 
-// Cache for CRN lookup (avoids repeated API calls)
-let cachedCrn = null;
+// Removed global cachedCrn to prevent cross-user token mismatches.
 
 const getAccessToken = async (apiToken) => {
     // All tokens go through IAM exchange first
     try {
         const params = new URLSearchParams();
         params.append('grant_type', 'urn:ibm:params:oauth:grant-type:apikey');
-        params.append('apikey', apiToken);
+        params.append('apikey', apiToken.trim());
 
         const response = await axios.post('https://iam.cloud.ibm.com/identity/token', params);
         if (response.data && response.data.access_token) {
@@ -31,43 +30,50 @@ const getAccessToken = async (apiToken) => {
             return response.data.id;
         }
     } catch (error) {
-        console.log('Legacy Login also failed.');
+        console.log('Legacy Login failed:', error.response?.data?.error?.message || error.message);
     }
 
-    throw new Error('Failed to authenticate with IBM Quantum.');
+    throw new Error('Failed to authenticate with IBM Quantum. Check if your API key is active/enabled in IBM Cloud console.');
 };
 
 const getServiceCrn = async (accessToken) => {
-    if (cachedCrn) return cachedCrn;
-
     try {
         const response = await axios.get('https://resource-controller.cloud.ibm.com/v2/resource_instances', {
             headers: { 'Authorization': `Bearer ${accessToken}` }
         });
 
+        // Find the first valid quantum computing instance
         const quantumInstance = response.data.resources.find(r => 
-            r.crn && r.crn.includes('quantum-computing')
+            r.crn && (r.crn.includes('quantum-computing') || r.crn.includes('q-computing'))
         );
 
         if (quantumInstance) {
-            cachedCrn = quantumInstance.crn;
-            console.log('Found Quantum Service CRN:', cachedCrn);
-            return cachedCrn;
+            console.log('Found Quantum Service CRN:', quantumInstance.crn);
+            return quantumInstance.crn;
         }
     } catch (error) {
-        console.error('CRN Lookup Failed:', error.message);
+        console.error('CRN Lookup Failed:', error.response?.data || error.message);
     }
 
     return null;
 };
 
-const validateApiKey = async (token) => {
+const getBaseUrl = (crn) => {
+    // Standard: crn:v1:bluemix:public:quantum-computing:us-east:a/...
     try {
-        await getAccessToken(token);
-        return true;
-    } catch (error) {
-        return false;
-    }
+        const parts = crn.split(':');
+        const region = parts[5];
+        if (region) {
+            return `https://${region}.quantum-computing.cloud.ibm.com`;
+        }
+    } catch (e) {}
+    return 'https://us-east.quantum-computing.cloud.ibm.com';
+};
+
+const validateApiKey = async (token) => {
+    // This will throw an error if the token is invalid or disabled
+    await getAccessToken(token);
+    return true;
 };
 
 const getAvailableBackends = async (token) => {
@@ -76,8 +82,9 @@ const getAvailableBackends = async (token) => {
         const crn = await getServiceCrn(accessToken);
 
         if (crn) {
+            const baseUrl = getBaseUrl(crn);
             // Use Runtime API
-            const response = await axios.get(`${IBM_RUNTIME_BASE}/backends`, {
+            const response = await axios.get(`${baseUrl}/backends`, {
                 headers: { 
                     'Authorization': `Bearer ${accessToken}`,
                     'Service-CRN': crn,
@@ -114,14 +121,16 @@ const getAvailableBackends = async (token) => {
 };
 
 const runJob = async (token, qasmCode, backendName, instance) => {
+    const trimmedToken = token.trim();
     try {
-        const accessToken = await getAccessToken(token);
+        const accessToken = await getAccessToken(trimmedToken);
         const crn = await getServiceCrn(accessToken);
 
         if (crn) {
+            const baseUrl = getBaseUrl(crn);
             // Use IBM Cloud Runtime API with Primitives V2
             // Circuits must be QASM 3.0 with ISA-compatible gates (rz, sx, x, cz)
-            console.log('Submitting to IBM Cloud Runtime API (Primitives V2)...');
+            console.log(`Submitting to IBM Cloud Runtime API (${baseUrl}) (Primitives V2)...`);
 
             const payload = {
                 program_id: 'sampler',
@@ -134,7 +143,7 @@ const runJob = async (token, qasmCode, backendName, instance) => {
                 }
             };
 
-            const response = await axios.post(`${IBM_RUNTIME_BASE}/jobs`, payload, {
+            const response = await axios.post(`${baseUrl}/jobs`, payload, {
                 headers: { 
                     'Authorization': `Bearer ${accessToken}`,
                     'Service-CRN': crn,
@@ -197,7 +206,8 @@ const getJobStatus = async (token, ibmJobId) => {
         const crn = await getServiceCrn(accessToken);
 
         if (crn) {
-            const response = await axios.get(`${IBM_RUNTIME_BASE}/jobs/${ibmJobId}`, {
+            const baseUrl = getBaseUrl(crn);
+            const response = await axios.get(`${baseUrl}/jobs/${ibmJobId}`, {
                 headers: { 
                     'Authorization': `Bearer ${accessToken}`,
                     'Service-CRN': crn,
@@ -222,7 +232,8 @@ const getJobResult = async (token, ibmJobId) => {
         const crn = await getServiceCrn(accessToken);
 
         if (crn) {
-            const response = await axios.get(`${IBM_RUNTIME_BASE}/jobs/${ibmJobId}/results`, {
+            const baseUrl = getBaseUrl(crn);
+            const response = await axios.get(`${baseUrl}/jobs/${ibmJobId}/results`, {
                 headers: { 
                     'Authorization': `Bearer ${accessToken}`,
                     'Service-CRN': crn,
@@ -234,17 +245,45 @@ const getJobResult = async (token, ibmJobId) => {
                 return { status: 'PENDING' };
             }
 
-            const counts = response.data.results[0]?.data?.counts || {};
-            const shots = 1024;
+            const resultData = response.data.results[0]?.data;
+            let counts = {};
+            let shots = 1024;
+
+            if (resultData) {
+                // V2 Primitives return samples inside a named bit register (often 'meas')
+                const bitRegister = Object.values(resultData)[0]; // Usually 'meas' or 'c'
+                
+                if (bitRegister && bitRegister.samples) {
+                    shots = bitRegister.samples.length;
+                    
+                    // First pass: find max width to ensure consistent padding
+                    let maxWidth = 4;
+                    bitRegister.samples.forEach(hex => {
+                        const bin = parseInt(hex, 16).toString(2);
+                        if (bin.length > maxWidth) maxWidth = bin.length;
+                    });
+
+                    bitRegister.samples.forEach(hex => {
+                        // Convert hex to binary bitstring and pad
+                        const bitstring = parseInt(hex, 16).toString(2).padStart(maxWidth, '0');
+                        counts[bitstring] = (counts[bitstring] || 0) + 1;
+                    });
+                } else if (resultData.counts) {
+                    counts = resultData.counts;
+                    shots = Object.values(counts).reduce((a, b) => a + b, 0) || 1024;
+                }
+            }
+
             const probabilities = {};
             for (const [state, count] of Object.entries(counts)) {
                 probabilities[state] = (count / shots).toFixed(4);
             }
+
             return {
                 counts, shots, probabilities,
                 metadata: {
-                    backendName: response.data.backend_name,
-                    timestamp: response.data.date
+                    backendName: response.data.backend_name || 'IBM Quantum',
+                    timestamp: response.data.date || new Date().toISOString()
                 }
             };
         }
@@ -279,10 +318,64 @@ const getJobResult = async (token, ibmJobId) => {
     }
 };
 
+const getRawJobInfo = async (token, ibmJobId) => {
+    try {
+        const accessToken = await getAccessToken(token);
+        const crn = await getServiceCrn(accessToken);
+
+        if (crn) {
+            const baseUrl = getBaseUrl(crn);
+            const response = await axios.get(`${baseUrl}/jobs/${ibmJobId}`, {
+                headers: { 
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Service-CRN': crn,
+                    'IBM-API-Version': '2025-01-01'
+                }
+            });
+            return response.data;
+        }
+
+        const response = await axios.get(`${IBM_API_BASE}/Jobs/${ibmJobId}`, {
+            headers: { 'x-access-token': accessToken }
+        });
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
+};
+
+const getRawJobResults = async (token, ibmJobId) => {
+    try {
+        const accessToken = await getAccessToken(token);
+        const crn = await getServiceCrn(accessToken);
+
+        if (crn) {
+            const baseUrl = getBaseUrl(crn);
+            const response = await axios.get(`${baseUrl}/jobs/${ibmJobId}/results`, {
+                headers: { 
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Service-CRN': crn,
+                    'IBM-API-Version': '2025-01-01'
+                }
+            });
+            return response.data;
+        }
+
+        const response = await axios.get(`${IBM_API_BASE}/Jobs/${ibmJobId}/result`, {
+            headers: { 'x-access-token': accessToken }
+        });
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
+};
+
 module.exports = {
     validateApiKey,
     getAvailableBackends,
     runJob,
     getJobStatus,
-    getJobResult
+    getJobResult,
+    getRawJobInfo,
+    getRawJobResults
 };

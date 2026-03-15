@@ -12,7 +12,7 @@ const authMiddleware = require('../middleware/authMiddleware');
 
 /**
  * @swagger
- * /ai/generate-circuit:
+ * /api/ai/generate-circuit:
  *   post:
  *     summary: Generate Qiskit code from natural language
  *     tags: [AI]

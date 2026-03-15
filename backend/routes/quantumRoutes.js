@@ -12,7 +12,7 @@ const authMiddleware = require('../middleware/authMiddleware');
 
 /**
  * @swagger
- * /quantum/connect:
+ * /api/quantum/connect:
  *   post:
  *     summary: Connect an IBM Quantum API Key
  *     tags: [Quantum]
@@ -43,7 +43,7 @@ router.post('/connect', authMiddleware, quantumController.connectQuantum);
 
 /**
  * @swagger
- * /quantum/backends:
+ * /api/quantum/backends:
  *   get:
  *     summary: Get available IBM Quantum backends
  *     tags: [Quantum]

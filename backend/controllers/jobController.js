@@ -63,6 +63,41 @@ const getJobs = async (req, res) => {
             where: { userId },
             orderBy: { createdAt: 'desc' }
         });
+
+        // Proactive sync for non-terminal jobs
+        const account = await prisma.quantumAccount.findFirst({ where: { userId } });
+        if (account) {
+            for (let job of jobs) {
+                const currentStatus = (job.status || '').toUpperCase();
+                if (currentStatus !== 'COMPLETED' && currentStatus !== 'FAILED' && currentStatus !== 'CANCELLED') {
+                    try {
+                        const newStatus = await ibmService.getJobStatus(account.token, job.ibmJobId);
+                        const normalizedNewStatus = newStatus.toUpperCase();
+                        
+                        if (normalizedNewStatus !== currentStatus) {
+                            let updateData = { status: newStatus }; // Store original case in DB for UI
+                            
+                            if (normalizedNewStatus === 'COMPLETED') {
+                                const result = await ibmService.getJobResult(account.token, job.ibmJobId);
+                                updateData.result = result;
+                            }
+                            
+                            await prisma.job.update({
+                                where: { id: job.id },
+                                data: updateData
+                            });
+                            
+                            // Update local object for response
+                            job.status = newStatus;
+                            if (updateData.result) job.result = updateData.result;
+                        }
+                    } catch (e) {
+                        console.error(`Sync failed for job ${job.ibmJobId}:`, e.message);
+                    }
+                }
+            }
+        }
+
         res.json(jobs);
     } catch (error) {
         console.error(error);
@@ -83,19 +118,35 @@ const getJobById = async (req, res) => {
             return res.status(404).json({ message: 'Job not found' });
         }
 
-        // If job is not completed, we might want to poll IBM here
-        if (job.status !== 'COMPLETED') {
+        // If job is not completed, or results are missing, poll IBM
+        const currentStatus = (job.status || '').toUpperCase();
+        const hasResults = job.result && job.result.probabilities && Object.keys(job.result.probabilities).length > 0;
+        const needsSync = (currentStatus === 'COMPLETED' && !hasResults) || 
+                         (currentStatus !== 'COMPLETED' && currentStatus !== 'FAILED' && currentStatus !== 'CANCELLED');
+
+        if (needsSync) {
             const account = await prisma.quantumAccount.findFirst({ where: { userId } });
-            const status = await ibmService.getJobStatus(account.token, job.ibmJobId);
-            
-            if (status === 'COMPLETED') {
-                const result = await ibmService.getJobResult(account.token, job.ibmJobId);
-                await prisma.job.update({
-                    where: { id },
-                    data: { status: 'COMPLETED', result }
-                });
-                job.status = 'COMPLETED';
-                job.result = result;
+            if (account) {
+                const status = await ibmService.getJobStatus(account.token, job.ibmJobId);
+                const normalizedStatus = (status || '').toUpperCase();
+                
+                // Always fetch result if we need sync and it's completed on IBM
+                if (normalizedStatus === 'COMPLETED') {
+                    const result = await ibmService.getJobResult(account.token, job.ibmJobId);
+                    
+                    const updatedJob = await prisma.job.update({
+                        where: { id },
+                        data: { status: status, result: result }
+                    });
+                    
+                    return res.json(updatedJob);
+                } else if (normalizedStatus !== currentStatus) {
+                    const updatedJob = await prisma.job.update({
+                        where: { id },
+                        data: { status: status }
+                    });
+                     return res.json(updatedJob);
+                }
             }
         }
 
@@ -106,4 +157,46 @@ const getJobById = async (req, res) => {
     }
 };
 
-module.exports = { runJob, getJobs, getJobById };
+const getRawInfo = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const userId = req.user.userId;
+
+        const job = await prisma.job.findUnique({ where: { id } });
+        if (!job || job.userId !== userId) {
+            return res.status(404).json({ message: 'Job not found' });
+        }
+
+        const account = await prisma.quantumAccount.findFirst({ where: { userId } });
+        if (!account) return res.status(404).json({ message: 'Quantum account not found' });
+
+        const rawData = await ibmService.getRawJobInfo(account.token, job.ibmJobId);
+        res.json(rawData);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error fetching raw job info' });
+    }
+};
+
+const getRawResults = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const userId = req.user.userId;
+
+        const job = await prisma.job.findUnique({ where: { id } });
+        if (!job || job.userId !== userId) {
+            return res.status(404).json({ message: 'Job not found' });
+        }
+
+        const account = await prisma.quantumAccount.findFirst({ where: { userId } });
+        if (!account) return res.status(404).json({ message: 'Quantum account not found' });
+
+        const rawData = await ibmService.getRawJobResults(account.token, job.ibmJobId);
+        res.json(rawData);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error fetching raw results' });
+    }
+};
+
+module.exports = { runJob, getJobs, getJobById, getRawInfo, getRawResults };

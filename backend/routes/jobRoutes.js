@@ -12,7 +12,7 @@ const authMiddleware = require('../middleware/authMiddleware');
 
 /**
  * @swagger
- * /jobs/run:
+ * /api/jobs/run:
  *   post:
  *     summary: Run a quantum circuit
  *     tags: [Jobs]
@@ -41,7 +41,7 @@ router.post('/run', authMiddleware, jobController.runJob);
 
 /**
  * @swagger
- * /jobs:
+ * /api/jobs:
  *   get:
  *     summary: Get all jobs for the user
  *     tags: [Jobs]
@@ -55,7 +55,7 @@ router.get('/', authMiddleware, jobController.getJobs);
 
 /**
  * @swagger
- * /jobs/{id}:
+ * /api/jobs/{id}:
  *   get:
  *     summary: Get job details by ID
  *     tags: [Jobs]
@@ -72,5 +72,7 @@ router.get('/', authMiddleware, jobController.getJobs);
  *         description: Job details
  */
 router.get('/:id', authMiddleware, jobController.getJobById);
+router.get('/:id/raw-info', authMiddleware, jobController.getRawInfo);
+router.get('/:id/raw-results', authMiddleware, jobController.getRawResults);
 
 module.exports = router;
