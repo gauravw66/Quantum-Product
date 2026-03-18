@@ -1,7 +1,13 @@
+
+
+
 const express = require('express');
 const router = express.Router();
 const quantumController = require('../controllers/quantumController');
 const authMiddleware = require('../middleware/authMiddleware');
+
+// Register /accounts route after all imports
+router.get('/accounts', authMiddleware, quantumController.getQuantumAccounts);
 
 /**
  * @swagger
@@ -54,5 +60,6 @@ router.post('/connect', authMiddleware, quantumController.connectQuantum);
  *         description: List of backends
  */
 router.get('/backends', authMiddleware, quantumController.getBackends);
+router.delete('/accounts/:id', authMiddleware, quantumController.deleteQuantumAccount);
 
 module.exports = router;

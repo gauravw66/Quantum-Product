@@ -1,7 +1,10 @@
+
 const express = require('express');
 const router = express.Router();
 const jobController = require('../controllers/jobController');
 const authMiddleware = require('../middleware/authMiddleware');
+// Dashboard stats route
+router.get('/stats', authMiddleware, jobController.getJobStats);
 
 /**
  * @swagger
@@ -38,6 +41,7 @@ const authMiddleware = require('../middleware/authMiddleware');
  *         description: Job created
  */
 router.post('/run', authMiddleware, jobController.runJob);
+router.post('/run-custom', authMiddleware, jobController.runJob);
 
 /**
  * @swagger

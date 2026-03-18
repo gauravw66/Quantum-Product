@@ -22,21 +22,41 @@ import {
   Code2,
   PieChart as ChartIcon
 } from 'lucide-react';
-import Link from 'next/link';
 import Editor from '@monaco-editor/react';
+import { toast } from 'sonner';
+
+interface JobResultData {
+  probabilities?: Record<string, string | number>;
+  counts?: Record<string, number>;
+  shots?: number;
+}
+
+interface JobDetails {
+  id: string;
+  ibmJobId?: string | null;
+  ibmPortalUrl?: string | null;
+  jobName?: string | null;
+  backend: string;
+  status: string;
+  createdAt: string;
+  code: string;
+  result?: JobResultData | null;
+}
 
 export default function JobDetailsPage() {
   const { id } = useParams();
   const router = useRouter();
-  const [modalContent, setModalContent] = useState<{title: string, data: any} | null>(null);
+  const [modalContent, setModalContent] = useState<{title: string, data: unknown} | null>(null);
 
-  const { data: job, isLoading } = useQuery({
+  const { data: job, isLoading } = useQuery<JobDetails>({
     queryKey: ['job', id],
     queryFn: async () => {
       const res = await api.get(`/jobs/${id}`);
       return res.data;
     },
   });
+
+  const ibmPortalHref = job?.ibmPortalUrl || (job?.ibmJobId ? `https://quantum.cloud.ibm.com/jobs/${job.ibmJobId}` : null);
 
   const fetchRawData = async (type: 'info' | 'results') => {
     try {
@@ -46,8 +66,8 @@ export default function JobDetailsPage() {
         title: type === 'info' ? 'IBM Job Metadata (Raw Info)' : 'IBM Execution Results (Raw JSON)',
         data: res.data
       });
-    } catch (err) {
-      alert('Failed to fetch raw data');
+    } catch {
+      toast.error('Failed to fetch raw data');
     }
   };
 
@@ -62,7 +82,7 @@ export default function JobDetailsPage() {
 
   const chartData = Object.entries(probabilities).map(([state, prob]) => ({
     name: `|${state}>`,
-    probability: parseFloat(prob as string) * 100,
+    probability: (typeof prob === 'number' ? prob : parseFloat(prob)) * 100,
     count: counts[state] || 0
   })).sort((a,b) => b.probability - a.probability);
 
@@ -84,10 +104,11 @@ export default function JobDetailsPage() {
           </div>
         </div>
         
-        {job.ibmJobId && (
+        {ibmPortalHref && (
           <a 
-            href={`https://quantum.cloud.ibm.com/jobs/${job.ibmJobId}`}
+            href={ibmPortalHref}
             target="_blank"
+            rel="noreferrer"
             className="flex items-center px-4 py-2 rounded-xl bg-slate-900 border border-white/5 text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800 transition-all shadow-lg"
           >
             IBM Portal <ExternalLink className="ml-2 h-3.5 w-3.5" />

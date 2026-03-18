@@ -31,7 +31,7 @@ export default function Home() {
             QUANTUM <span className="text-accent underline decoration-accent/30 underline-offset-8">CLOUD</span>
           </h1>
           <p className="text-xl md:text-2xl text-slate-400 font-medium max-w-2xl mx-auto">
-            Design, synthesize, and execute quantum circuits on the world's most advanced hardware.
+            Design, synthesize, and execute quantum circuits on the world&apos;s most advanced hardware.
           </p>
         </div>
 

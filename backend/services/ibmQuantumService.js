@@ -70,6 +70,35 @@ const getBaseUrl = (crn) => {
     return 'https://us-east.quantum-computing.cloud.ibm.com';
 };
 
+const isHtmlResponse = (data) => {
+    return typeof data === 'string' && /<\s*!doctype\s+html|<\s*html|<\s*head|<\s*body/i.test(data);
+};
+
+const normalizeBackends = (payload) => {
+    const list = Array.isArray(payload)
+        ? payload
+        : Array.isArray(payload?.backends)
+            ? payload.backends
+            : Array.isArray(payload?.data)
+                ? payload.data
+                : Array.isArray(payload?.devices)
+                    ? payload.devices
+                    : (payload?.devices && typeof payload.devices === 'object')
+                        ? Object.values(payload.devices)
+                        : [];
+
+    return list
+        .map((b) => ({
+            name: b.name || b.backend_name || b.id,
+            type: (b.simulator || b.type === 'simulator' || b.clops?.type === 'simulator') ? 'simulator' : 'hardware',
+            nQubits: b.num_qubits ?? b.nQubits ?? b.n_qubits ?? b.qubits ?? null,
+            status: typeof b.status === 'string'
+                ? b.status
+                : (b.status?.status || b.status?.name || (b.operational === false ? 'offline' : 'online'))
+        }))
+        .filter((b) => Boolean(b.name));
+};
+
 const validateApiKey = async (token) => {
     // This will throw an error if the token is invalid or disabled
     await getAccessToken(token);
@@ -83,21 +112,36 @@ const getAvailableBackends = async (token) => {
 
         if (crn) {
             const baseUrl = getBaseUrl(crn);
-            // Use Runtime API
-            const response = await axios.get(`${baseUrl}/backends`, {
-                headers: { 
-                    'Authorization': `Bearer ${accessToken}`,
-                    'Service-CRN': crn,
-                    'IBM-API-Version': '2025-01-01'
+            const runtimeHeaders = {
+                'Authorization': `Bearer ${accessToken}`,
+                'Service-CRN': crn,
+                'IBM-API-Version': '2025-01-01',
+                'Accept': 'application/json'
+            };
+
+            // Try known runtime discovery endpoints in order.
+            const runtimeUrls = [
+                `${baseUrl}/backends`,
+                'https://quantum.cloud.ibm.com/api/v1/backends',
+                `${baseUrl}/api/v1/backends`,
+                `${baseUrl}/runtime/backends`
+            ];
+
+            for (const url of runtimeUrls) {
+                try {
+                    const response = await axios.get(url, { headers: runtimeHeaders });
+                    if (isHtmlResponse(response.data)) {
+                        console.warn(`IBM runtime endpoint returned HTML, trying next endpoint: ${url}`);
+                        continue;
+                    }
+
+                    const mapped = normalizeBackends(response.data);
+                    if (mapped.length > 0) {
+                        return mapped;
+                    }
+                } catch (runtimeError) {
+                    console.warn(`Runtime backend probe failed for ${url}:`, runtimeError.response?.status || runtimeError.message);
                 }
-            });
-            if (Array.isArray(response.data)) {
-                return response.data.map(b => ({
-                    name: b.name || b.backend_name,
-                    type: b.simulator ? 'simulator' : 'hardware',
-                    nQubits: b.num_qubits || b.nQubits,
-                    status: b.status
-                }));
             }
         }
 
@@ -105,15 +149,16 @@ const getAvailableBackends = async (token) => {
         const response = await axios.get(`${IBM_API_BASE}/Backends`, {
             headers: { 'x-access-token': accessToken, 'Accept': 'application/json' }
         });
-        if (typeof response.data === 'string') {
-            throw new Error('IBM returned HTML instead of backend data.');
+        if (isHtmlResponse(response.data)) {
+            throw new Error('IBM returned HTML instead of backend data. Verify API key type, IBM Quantum service entitlement, and runtime endpoint access.');
         }
-        return response.data.map(b => ({
-            name: b.name,
-            type: b.simulator ? 'simulator' : 'hardware',
-            nQubits: b.nQubits,
-            status: b.status
-        }));
+
+        const legacyMapped = normalizeBackends(response.data);
+        if (legacyMapped.length > 0) {
+            return legacyMapped;
+        }
+
+        throw new Error('No quantum backends were returned by IBM APIs.');
     } catch (error) {
         console.error('IBM Backend Error:', error.message);
         throw error;
@@ -370,6 +415,17 @@ const getRawJobResults = async (token, ibmJobId) => {
     }
 };
 
+const getJobPortalUrl = async (token, ibmJobId) => {
+    const accessToken = await getAccessToken(token);
+    const crn = await getServiceCrn(accessToken);
+
+    if (crn) {
+        return `https://quantum.cloud.ibm.com/instances/${encodeURIComponent(crn)}/jobs/${ibmJobId}`;
+    }
+
+    return `https://quantum.cloud.ibm.com/jobs/${ibmJobId}`;
+};
+
 module.exports = {
     validateApiKey,
     getAvailableBackends,
@@ -377,5 +433,6 @@ module.exports = {
     getJobStatus,
     getJobResult,
     getRawJobInfo,
-    getRawJobResults
+    getRawJobResults,
+    getJobPortalUrl
 };

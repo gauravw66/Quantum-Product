@@ -3,6 +3,17 @@ const jwt = require('jsonwebtoken');
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
+const toDisplayName = (email) => {
+    if (!email || typeof email !== 'string') return 'User';
+    const localPart = email.split('@')[0] || 'User';
+    return localPart
+        .replace(/[._-]+/g, ' ')
+        .split(' ')
+        .filter(Boolean)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ');
+};
+
 const signup = async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -55,11 +66,44 @@ const login = async (req, res) => {
             { expiresIn: '24h' }
         );
 
-        res.json({ token, userId: user.id, email: user.email });
+        const profile = {
+            id: user.id,
+            email: user.email,
+            name: toDisplayName(user.email)
+        };
+
+        res.json({ token, userId: user.id, email: user.email, user: profile });
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Server error during login' });
     }
 };
 
-module.exports = { signup, login };
+const me = async (req, res) => {
+    try {
+        const userId = req.user?.userId;
+        if (!userId) {
+            return res.status(401).json({ message: 'Unauthorized' });
+        }
+
+        const user = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { id: true, email: true }
+        });
+
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        res.json({
+            id: user.id,
+            email: user.email,
+            name: toDisplayName(user.email)
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server error fetching profile' });
+    }
+};
+
+module.exports = { signup, login, me };

@@ -40,17 +40,21 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 app.use(cors());
 app.use(express.json());
 
+
 const authRoutes = require('./routes/authRoutes');
 const quantumRoutes = require('./routes/quantumRoutes');
 const aiRoutes = require('./routes/aiRoutes');
 const jobRoutes = require('./routes/jobRoutes');
 const moduleRoutes = require('./routes/moduleRoutes');
+const generateCircuitRoute = require('./routes/generateCircuit');
+
 
 app.use('/api/auth', authRoutes);
 app.use('/api/quantum', quantumRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/jobs', jobRoutes);
 app.use('/api/modules', moduleRoutes);
+app.use('/api/generate-circuit', generateCircuitRoute);
 
 app.get('/', (req, res) => {
     res.send('Quantum Cloud Runner Backend is running');

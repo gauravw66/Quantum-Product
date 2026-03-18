@@ -3,11 +3,26 @@
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import Link from 'next/link';
+import { isAxiosError } from 'axios';
+
+interface ApiErrorPayload {
+  message?: string;
+  error?: string;
+}
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const { login, isLoggingIn, loginError } = useAuth();
+
+  const loginErrorMessage = (() => {
+    if (!loginError) return null;
+    if (isAxiosError<ApiErrorPayload>(loginError)) {
+      return loginError.response?.data?.message || loginError.response?.data?.error || 'Failed to sign in. Please check your credentials.';
+    }
+    if (loginError instanceof Error) return loginError.message;
+    return 'Failed to sign in. Please check your credentials.';
+  })();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,9 +74,9 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {loginError && (
+          {loginErrorMessage && (
             <div className="rounded-lg bg-error/10 p-3 text-sm text-error border border-error/20">
-              {(loginError as any)?.response?.data?.message || 'Failed to sign in. Please check your credentials.'}
+              {loginErrorMessage}
             </div>
           )}
 
@@ -87,7 +102,7 @@ export default function LoginPage() {
         </form>
 
         <p className="mt-4 text-center text-sm text-slate-400">
-          Don't have an account?{' '}
+          Don&apos;t have an account?{' '}
           <Link href="/signup" className="font-semibold text-accent hover:text-accent/80">
             Sign up now
           </Link>

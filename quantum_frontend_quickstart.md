@@ -1,481 +1,303 @@
-# Quantum Cloud Runner --- Frontend Quickstart Guide
+You’re already at a **very solid system design level** — now what you need is a **“polish checklist + AI prompt rules”** to push it to *production-grade UI/UX (IBM/Vercel level)*.
 
-## Stack
+I’ll break this into 2 parts:
 
-**Framework** - React
+---
 
-**Styling** - TailwindCSS - shadcn/ui component library
+# ✅ 1. FINAL UI/UX CHECKLIST (Brutally Practical)
 
-**State Management** - TanStack React Query
+Use this like a **pre-launch audit** 👇
 
-**Forms** - React Hook Form + Zod
+---
 
-**Charts** - Recharts
+## 🎯 A. Visual Consistency (MOST IMPORTANT)
 
-**Code Editor** - Monaco Editor
+**Rule:** Everything should feel like it belongs to the same system.
 
-**Icons** - Lucide Icons
+✔ Check:
 
-**Backend** - Node.js API running on http://localhost:5000
+* Same **border radius** everywhere (`rounded-2xl` recommended)
+* Same **spacing scale** (8px system → Tailwind: `p-2 p-4 p-6`)
+* Same **font hierarchy**
 
-------------------------------------------------------------------------
+👉 Standard:
 
-# UI Design Principles
+* Page Title → `text-2xl font-semibold`
+* Section Title → `text-lg font-medium`
+* Body → `text-sm text-muted-foreground`
 
-The interface should feel similar to:
+✔ Fix:
 
--   IBM Quantum dashboard
--   Vercel developer dashboard
+* If anything looks “slightly off” → it *is off*
 
-Principles:
+---
 
--   Minimal design
--   Dark mode first
--   Developer-focused UI
--   Data-heavy layout
+## 🌑 B. Dark Mode Perfection
 
-### Color Theme
+Your theme is strong, but check contrast:
 
-  Element      Color
-  ------------ ---------
-  Background   #0F172A
-  Cards        #1E293B
-  Accent       #6366F1
-  Success      #10B981
-  Error        #EF4444
+✔ Background layering:
 
-------------------------------------------------------------------------
+* Page → `#0F172A`
+* Card → `#1E293B`
+* Hover → `#334155`
 
-# Project Structure
+✔ Rules:
 
-    frontend/
+* Never pure black (#000)
+* Never pure white text (#FFF → use `text-gray-100`)
 
-    src/
-      app/
-        layout.tsx
-        page.tsx
+✔ Test:
 
-        login/
-        signup/
-        dashboard/
-        modules/
-        jobs/
-        ai/
-        settings/
+* Reduce brightness → still readable? ✔
 
-      components/
-        ui/
-        layout/
-        charts/
-        quantum/
+---
 
-      hooks/
-        useAuth.ts
-        useJobs.ts
-        useModules.ts
+## 🧩 C. Layout & Spacing Rules
 
-      lib/
-        api.ts
+**Golden rule: whitespace = premium feel**
 
-      types/
-        api.ts
+✔ Follow:
 
-------------------------------------------------------------------------
+* Page padding: `px-6 py-4`
+* Card padding: `p-4` or `p-6`
+* Gap between sections: `gap-6`
 
-# Layout System
+❌ Avoid:
 
-Use a persistent sidebar layout.
+* Cramped UI
+* Uneven spacing
 
-    +------------------------------------+
-    | Sidebar |                          |
-    |         |        Content           |
-    |         |                          |
-    |         |                          |
-    +------------------------------------+
+---
 
-### Sidebar Menu
+## 📊 D. Data UI (Your App is Data Heavy)
 
--   Dashboard
--   Modules
--   AI Builder
--   Jobs
--   Settings
+This is where most apps fail.
 
-------------------------------------------------------------------------
+### Tables:
 
-# Authentication Pages
+✔ Must have:
 
-## Login Page
+* Row hover effect
+* Zebra or subtle divider
+* Right-aligned numbers
 
-Fields:
+✔ Add:
 
--   Email
--   Password
+* Status badge colors
+* Sorting (even basic)
 
-API:
+---
 
-POST /auth/login
+### Cards:
 
-Flow:
+✔ Every card should answer:
 
-User login → Receive JWT → Store token → Redirect to /dashboard
-
-------------------------------------------------------------------------
-
-## Signup Page
-
-API:
-
-POST /auth/signup
-
-------------------------------------------------------------------------
-
-# Dashboard Page
-
-Route:
-
-/dashboard
-
-### Components
-
-**Stats Cards**
-
--   Total Jobs
--   Successful Jobs
--   Failed Jobs
--   Connected Backend
-
-**Recent Jobs Table**
-
-| Job \| Backend \| Status \| Time \|
-
-API:
-
-GET /jobs
-
-------------------------------------------------------------------------
-
-# Modules Page
-
-Route:
-
-/modules
-
-Displays prebuilt circuits.
+> “What action can I take from here?”
 
 Example:
 
-Bell State\
-Create entanglement circuit
+* Jobs → “View details”
+* Modules → “Run”
 
-Buttons:
+---
 
-Run Module
+## ⚡ E. Micro-Interactions (This makes it FEEL premium)
 
-API:
+✔ Add:
 
-GET /modules
+* Button hover → slight brightness
+* Card hover → lift (`hover:shadow-lg`)
+* Click → subtle scale (`active:scale-95`)
 
-Run module:
+✔ Loading:
 
-POST /jobs/run
+* Skeletons > spinners
 
-Example body:
+---
 
-    {
-     moduleId: "...",
-     backend: "ibmq_qasm_simulator"
-    }
+## 🧠 F. UX Flow Check
 
-Backend dropdown:
+Test this mentally:
 
-GET /quantum/backends
+> “New user lands → understands → runs job → sees result”
 
-------------------------------------------------------------------------
+If ANY step feels confusing → fix UI, not docs.
 
-# AI Builder Page
+---
 
-Route:
+## 🧪 G. Error & Empty States (CRITICAL)
 
-/ai
+✔ You must handle:
 
-Layout:
-
-Prompt input
-
-Example:
-
-Create a 3 qubit GHZ state
-
-Button:
-
-Generate Code
-
-Generated code section using Monaco Editor.
-
-Run button:
-
-Run on Simulator
-
-API:
-
-POST /ai/generate-circuit
-
-Response:
-
-    {
-     code: "...qiskit code..."
-    }
-
-------------------------------------------------------------------------
-
-# Jobs Page
-
-Route:
-
-/jobs
-
-Table:
-
-| Job \| Backend \| Status \| Created \|
-
-API:
-
-GET /jobs
-
-------------------------------------------------------------------------
-
-# Job Details Page
-
-Route:
-
-/jobs/:id
-
-Sections:
-
--   Job metadata
--   Circuit visualization
--   Result histogram
--   Raw JSON output
-
-Example metadata:
-
-Backend: ibmq_qasm_simulator\
-Shots: 1024\
-Execution time: 2.3s
-
-Charts built using Recharts.
-
-------------------------------------------------------------------------
-
-# Settings Page
-
-Route:
-
-/settings
-
-Purpose:
-
-Connect IBM Quantum account.
-
-UI:
-
-IBM Quantum API Key field
-
-Connect button
-
-API:
-
-POST /quantum/connect
-
-------------------------------------------------------------------------
-
-# API Client
-
-Create centralized API client.
-
-File:
-
-src/lib/api.ts
+* No jobs yet
+* No modules
+* API failure
 
 Example:
 
-``` javascript
-import axios from "axios";
-
-const api = axios.create({
-  baseURL: "http://localhost:5000"
-});
-
-export default api;
+```
+No jobs yet
+Run your first quantum circuit 🚀
 ```
 
-------------------------------------------------------------------------
+---
 
-# Auth Hook
+## 🧾 H. Typography Polish
 
-src/hooks/useAuth.ts
+✔ Use:
 
-Example:
+* Inter (recommended)
+* Tight line height
 
-``` javascript
-import { useState } from "react";
-import api from "../lib/api";
+✔ Rule:
 
-export function useAuth() {
-  const [user, setUser] = useState(null);
+* Avoid long paragraphs
+* Use short developer-style text
 
-  const login = async (email, password) => {
-    const res = await api.post("/auth/login", { email, password });
-    localStorage.setItem("token", res.data.token);
-  };
+---
 
-  return { user, login };
-}
+## 🧭 I. Sidebar UX
+
+✔ Must:
+
+* Highlight active route
+* Collapse on small screens
+* Icons + labels
+
+✔ Bonus:
+
+* Add subtle logo area at top
+
+---
+
+## ⚙️ J. Performance Feel
+
+Even if backend is slow:
+
+✔ Fake speed using:
+
+* Skeleton loaders
+* Optimistic UI
+
+---
+
+# 🚀 2. IDE PROMPT GUIDE (THIS IS GOLD)
+
+You can give this directly to Cursor / Copilot / Claude / GPT IDE.
+
+---
+
+## 🧠 MASTER PROMPT TEMPLATE
+
+Use this every time:
+
+```
+You are a senior frontend engineer designing a premium developer dashboard UI inspired by IBM Quantum and Vercel.
+
+Follow STRICT UI/UX rules:
+
+- Use dark theme (#0F172A background, #1E293B cards)
+- Use consistent spacing (p-4, p-6, gap-6)
+- Use rounded-2xl for all components
+- Use subtle hover effects (hover:bg-slate-700, hover:shadow-md)
+- Use clean typography (text-sm, text-muted, font-medium)
+- Use shadcn/ui components where possible
+- Ensure strong visual hierarchy
+- Avoid clutter — keep it minimal and developer-focused
+
+UX Rules:
+- Every component must have a clear purpose
+- Add loading skeletons
+- Add empty states
+- Add error states
+- Make interactions smooth and responsive
+
+Code Quality:
+- Clean, reusable components
+- No inline messy styles
+- Proper separation of concerns
+
+Now build/refactor this component:
+[PASTE YOUR COMPONENT HERE]
 ```
 
-------------------------------------------------------------------------
+---
 
-# Reusable Components
+## 🎯 SPECIFIC PROMPTS YOU SHOULD USE
 
-Recommended components:
+---
 
--   Button
--   Card
--   Table
--   CodeEditor
--   Sidebar
--   Navbar
--   JobStatusBadge
--   ModuleCard
+### 1. Improve UI
 
-Example:
+```
+Refactor this UI to look like a premium SaaS dashboard (Vercel style).
+Improve spacing, hierarchy, and visual clarity.
+Do not change functionality.
+```
 
-    <JobStatusBadge status="completed" />
+---
 
-Status colors:
+### 2. Add Micro-Interactions
 
-  Status      Color
-  ----------- --------
-  running     yellow
-  completed   green
-  failed      red
+```
+Enhance this component with subtle animations and hover states.
+Keep it minimal and professional.
+```
 
-------------------------------------------------------------------------
+---
 
-# Circuit Visualization
+### 3. Fix Layout
 
-Options:
+```
+Fix alignment, spacing, and responsiveness issues in this layout.
+Ensure consistent padding and grid usage.
+```
 
--   quantum-circuit-js
--   Qiskit circuit diagram rendering
+---
 
-Example:
+### 4. Add Empty + Loading States
 
-    q0 —H—■—
-           |
-    q1 ——X——
+```
+Add skeleton loading UI and proper empty states for this component.
+```
 
-------------------------------------------------------------------------
+---
 
-# Charts for Results
+### 5. Make it Look Premium
 
-Example histogram data:
+```
+Upgrade this UI to feel production-grade and polished.
+Inspired by IBM Quantum dashboard.
+```
 
-  State   Probability
-  ------- -------------
-  00      0.49
-  11      0.51
+---
 
-Library:
+# 🧠 PRO-LEVEL INSIGHT (IMPORTANT)
 
-Recharts
+Your app is **not just UI — it's a developer tool**
 
-------------------------------------------------------------------------
+So prioritize:
 
-# Loading States
+👉 Clarity > Beauty
+👉 Speed feel > Animation
+👉 Data readability > Fancy UI
 
-Show loading UI during job execution.
+---
 
-Example:
+# ⚡ FINAL “SHIP READY” CHECK
 
-Running quantum job...
+Before launch, ask:
 
-Spinner component.
+* Does it feel fast? ⚡
+* Does it feel clean? 🧼
+* Can a new user run a job in <30 sec? ⏱️
+* Does it look like a paid product? 💰
 
-------------------------------------------------------------------------
+---
 
-# Error Handling
+If you want, next step I can:
 
-Examples:
-
--   Invalid IBM API Key
--   Failed to connect IBM Quantum
--   Job execution failed
-
-Show toast or alert messages.
-
-------------------------------------------------------------------------
-
-# Dark Mode
-
-Default theme:
-
-dark
-
-Tailwind config:
-
-    darkMode: "class"
-
-------------------------------------------------------------------------
-
-# MVP UI Pages
-
-Required pages:
-
--   Login
--   Signup
--   Dashboard
--   Modules
--   AI Builder
--   Jobs
--   Job Details
--   Settings
-
-Total: 8 pages
-
-------------------------------------------------------------------------
-
-# Development Setup
-
-Create project:
-
-    npx create-next-app quantum-ui
-
-Install dependencies:
-
-    npm install axios @tanstack/react-query tailwindcss lucide-react recharts
-
-Run dev server:
-
-    npm run dev
-
-Frontend:
-
-http://localhost:3000
-
-Backend:
-
-http://localhost:5000
-
-------------------------------------------------------------------------
-
-# Future UI Improvements
-
-Possible future features:
-
--   Drag-and-drop quantum circuit builder
--   Hardware backend selector
--   Cost estimation for quantum runs
--   Real-time job status updates
--   Team collaboration
+✅ Audit your actual UI (paste screenshots/components)
+✅ Give you **exact Tailwind fixes**
+✅ Or generate a **pixel-perfect dashboard layout code**
