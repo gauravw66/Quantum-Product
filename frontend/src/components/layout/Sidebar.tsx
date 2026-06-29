@@ -5,7 +5,6 @@ import { usePathname } from 'next/navigation';
 import { 
   LayoutDashboard, 
   Box, 
-  Cpu, 
   History, 
   Settings, 
   LogOut,
@@ -22,7 +21,6 @@ function cn(...inputs: ClassValue[]) {
 const menuItems = [
   { name: 'Dashboard', icon: LayoutDashboard, href: '/dashboard' },
   { name: 'Modules', icon: Box, href: '/modules' },
-  { name: 'AI Builder', icon: Cpu, href: '/ai' },
   { name: 'Jobs', icon: History, href: '/jobs' },
   { name: 'Settings', icon: Settings, href: '/settings' },
 ];
