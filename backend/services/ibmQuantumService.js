@@ -1,4 +1,5 @@
 const axios = require('axios');
+const zlib = require('zlib');
 
 const IBM_AUTH_URL = 'https://quantum-computing.ibm.com/api/users/loginWithToken'; 
 const IBM_API_BASE = 'https://quantum-computing.ibm.com/api';
@@ -72,6 +73,100 @@ const getBaseUrl = (crn) => {
 
 const isHtmlResponse = (data) => {
     return typeof data === 'string' && /<\s*!doctype\s+html|<\s*html|<\s*head|<\s*body/i.test(data);
+};
+
+const decodeCompressedNpyUint8Array = (base64Data) => {
+    try {
+        const inflated = zlib.inflateSync(Buffer.from(base64Data, 'base64'));
+
+        if (inflated.length < 10 || inflated.subarray(0, 6).toString('binary') !== '\u0093NUMPY') {
+            return null;
+        }
+
+        const majorVersion = inflated[6];
+        let headerLength = 0;
+        let dataOffset = 0;
+
+        if (majorVersion === 1) {
+            headerLength = inflated.readUInt16LE(8);
+            dataOffset = 10;
+        } else if (majorVersion === 2 || majorVersion === 3) {
+            headerLength = inflated.readUInt32LE(8);
+            dataOffset = 12;
+        } else {
+            return null;
+        }
+
+        const payloadOffset = dataOffset + headerLength;
+        return inflated.subarray(payloadOffset);
+    } catch (error) {
+        return null;
+    }
+};
+
+const decodePrimitiveSamplerResult = (responseData) => {
+    const primitiveValue = responseData?.__type__ === 'PrimitiveResult'
+        ? responseData.__value__
+        : responseData;
+
+    const pubResults = primitiveValue?.pub_results;
+    if (!Array.isArray(pubResults) || pubResults.length === 0) {
+        return null;
+    }
+
+    const firstPub = pubResults[0]?.__value__ || pubResults[0];
+    const dataBin = firstPub?.data?.__value__ || firstPub?.data;
+    const fields = dataBin?.fields;
+
+    if (!fields || typeof fields !== 'object') {
+        return null;
+    }
+
+    const firstFieldName = dataBin?.field_names?.[0] || Object.keys(fields)[0];
+    const firstField = firstFieldName ? fields[firstFieldName] : null;
+    const bitArray = firstField?.__value__ || firstField;
+
+    if (!bitArray) {
+        return null;
+    }
+
+    let samples = [];
+    const numBits = bitArray.num_bits || 1;
+
+    if (Array.isArray(bitArray.samples)) {
+        samples = bitArray.samples;
+    } else {
+        const compressedArray = bitArray.array?.__value__;
+        if (!compressedArray) {
+            return null;
+        }
+
+        const decoded = decodeCompressedNpyUint8Array(compressedArray);
+        if (!decoded) {
+            return null;
+        }
+
+        samples = Array.from(decoded);
+    }
+
+    const counts = {};
+    for (const sample of samples) {
+        const bitstring = Number(sample).toString(2).padStart(numBits, '0');
+        counts[bitstring] = (counts[bitstring] || 0) + 1;
+    }
+
+    const shots = samples.length;
+    const probabilities = {};
+    for (const [state, count] of Object.entries(counts)) {
+        probabilities[state] = Number((count / shots).toFixed(4));
+    }
+
+    return {
+        counts,
+        shots,
+        probabilities,
+        metadata: primitiveValue?.metadata || {}
+    };
 };
 
 const normalizeBackends = (payload) => {
@@ -182,9 +277,13 @@ const runJob = async (token, qasmCode, backendName, instance) => {
                 backend: backendName,
                 params: {
                     pubs: [
-                        [qasmCode, null, 1024]
+                        [qasmCode]
                     ],
-                    version: "2"
+                    options: {
+                        default_shots: 1024
+                    },
+                    version: 2,
+                    support_qiskit: true
                 }
             };
 
@@ -285,52 +384,61 @@ const getJobResult = async (token, ibmJobId) => {
                     'IBM-API-Version': '2025-01-01'
                 }
             });
-            
-            if (!response.data || !response.data.results) {
-                return { status: 'PENDING' };
+
+            const normalizedResult = decodePrimitiveSamplerResult(response.data);
+            if (normalizedResult) {
+                return {
+                    ...normalizedResult,
+                    metadata: {
+                        ...normalizedResult.metadata,
+                        backendName: response.data?.backend_name || response.data?.backend || 'IBM Quantum',
+                        timestamp: response.data?.created || response.data?.date || new Date().toISOString()
+                    }
+                };
             }
 
-            const resultData = response.data.results[0]?.data;
-            let counts = {};
-            let shots = 1024;
+            if (response.data?.results) {
+                const resultData = response.data.results[0]?.data;
+                let counts = {};
+                let shots = 1024;
 
-            if (resultData) {
-                // V2 Primitives return samples inside a named bit register (often 'meas')
-                const bitRegister = Object.values(resultData)[0]; // Usually 'meas' or 'c'
-                
-                if (bitRegister && bitRegister.samples) {
-                    shots = bitRegister.samples.length;
-                    
-                    // First pass: find max width to ensure consistent padding
-                    let maxWidth = 4;
-                    bitRegister.samples.forEach(hex => {
-                        const bin = parseInt(hex, 16).toString(2);
-                        if (bin.length > maxWidth) maxWidth = bin.length;
-                    });
+                if (resultData) {
+                    const bitRegister = Object.values(resultData)[0];
 
-                    bitRegister.samples.forEach(hex => {
-                        // Convert hex to binary bitstring and pad
-                        const bitstring = parseInt(hex, 16).toString(2).padStart(maxWidth, '0');
-                        counts[bitstring] = (counts[bitstring] || 0) + 1;
-                    });
-                } else if (resultData.counts) {
-                    counts = resultData.counts;
-                    shots = Object.values(counts).reduce((a, b) => a + b, 0) || 1024;
+                    if (bitRegister && bitRegister.samples) {
+                        shots = bitRegister.samples.length;
+
+                        let maxWidth = 4;
+                        bitRegister.samples.forEach(hex => {
+                            const bin = parseInt(hex, 16).toString(2);
+                            if (bin.length > maxWidth) maxWidth = bin.length;
+                        });
+
+                        bitRegister.samples.forEach(hex => {
+                            const bitstring = parseInt(hex, 16).toString(2).padStart(maxWidth, '0');
+                            counts[bitstring] = (counts[bitstring] || 0) + 1;
+                        });
+                    } else if (resultData.counts) {
+                        counts = resultData.counts;
+                        shots = Object.values(counts).reduce((a, b) => a + b, 0) || 1024;
+                    }
                 }
-            }
 
-            const probabilities = {};
-            for (const [state, count] of Object.entries(counts)) {
-                probabilities[state] = (count / shots).toFixed(4);
-            }
-
-            return {
-                counts, shots, probabilities,
-                metadata: {
-                    backendName: response.data.backend_name || 'IBM Quantum',
-                    timestamp: response.data.date || new Date().toISOString()
+                const probabilities = {};
+                for (const [state, count] of Object.entries(counts)) {
+                    probabilities[state] = Number((count / shots).toFixed(4));
                 }
-            };
+
+                return {
+                    counts, shots, probabilities,
+                    metadata: {
+                        backendName: response.data.backend_name || response.data.backend || 'IBM Quantum',
+                        timestamp: response.data.date || new Date().toISOString()
+                    }
+                };
+            }
+
+            return { status: 'PENDING' };
         }
 
         // Legacy fallback
